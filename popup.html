@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <!-- Auth screen -->
+  <div id="auth-screen" class="screen hidden">
+    <div class="logo">💣 Gmail Nuke</div>
+    <p class="subtitle">Connect your Gmail to get started</p>
+    <button id="auth-btn" class="btn btn-primary btn-full">Sign in with Google</button>
+  </div>
+
+  <!-- Idle screen — configure job -->
+  <div id="idle-screen" class="screen hidden">
+    <div class="logo">💣 Gmail Nuke</div>
+    <p class="subtitle">Select what to delete. Starred &amp; Important emails are always safe.</p>
+
+    <div class="section">
+      <label class="checkbox-row">
+        <input type="checkbox" id="chk-old" checked />
+        <span>All email before 2024</span>
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="chk-promos" checked />
+        <span>Promotions (all time)</span>
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="chk-social" checked />
+        <span>Social notifications (all time)</span>
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="chk-updates" checked />
+        <span>Updates (all time)</span>
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="chk-forums" checked />
+        <span>Forums (all time)</span>
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="chk-spam" checked />
+        <span>Spam</span>
+      </label>
+    </div>
+
+    <div class="section">
+      <div class="toggle-row">
+        <span id="mode-label">Move to Trash</span>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-permanent" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="safety-badge">🛡️ Starred &amp; Important emails are always protected</div>
+
+    <button id="dry-run-btn" class="btn btn-secondary btn-full">Dry Run (count only)</button>
+    <button id="start-btn" class="btn btn-danger btn-full">Start Deleting</button>
+  </div>
+
+  <!-- Running screen -->
+  <div id="running-screen" class="screen hidden">
+    <div class="logo">💣 Gmail Nuke</div>
+
+    <div class="status-area">
+      <div class="status-label" id="status-label">Scanning...</div>
+      <div class="status-detail" id="status-detail">Looking for emails to delete</div>
+
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-value" id="stat-scanned">0</span>
+          <span class="stat-label">Found</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="stat-deleted">0</span>
+          <span class="stat-label">Deleted</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button id="pause-btn" class="btn btn-secondary">Pause</button>
+      <button id="cancel-btn" class="btn btn-ghost">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Paused screen -->
+  <div id="paused-screen" class="screen hidden">
+    <div class="logo">💣 Gmail Nuke</div>
+    <div class="status-area">
+      <div class="status-label">Paused</div>
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-value" id="paused-scanned">0</span>
+          <span class="stat-label">Found</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="paused-deleted">0</span>
+          <span class="stat-label">Deleted</span>
+        </div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button id="resume-btn" class="btn btn-primary">Resume</button>
+      <button id="cancel-paused-btn" class="btn btn-ghost">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Done screen -->
+  <div id="done-screen" class="screen hidden">
+    <div class="logo">💣 Gmail Nuke</div>
+    <div class="done-icon">✅</div>
+    <div class="done-title" id="done-title">Done!</div>
+    <div class="done-count" id="done-count">0 emails deleted</div>
+    <button id="reset-btn" class="btn btn-primary btn-full">Run Again</button>
+  </div>
+
+  <!-- Error screen -->
+  <div id="error-screen" class="screen hidden">
+    <div class="logo">💣 Gmail Nuke</div>
+    <div class="done-icon">❌</div>
+    <div class="done-title">Error</div>
+    <div class="error-msg" id="error-msg"></div>
+    <button id="error-reset-btn" class="btn btn-primary btn-full">Try Again</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

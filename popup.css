@@ -1,0 +1,266 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 340px;
+  min-height: 200px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: #0f0f0f;
+  color: #e5e5e5;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.hidden { display: none !important; }
+
+.screen {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Logo ── */
+.logo {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: #888;
+  line-height: 1.4;
+}
+
+/* ── Sections ── */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Checkboxes ── */
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 13px;
+}
+
+.checkbox-row:hover {
+  background: #1a1a1a;
+}
+
+.checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #ef4444;
+  flex-shrink: 0;
+}
+
+/* ── Toggle ── */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #1a1a1a;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+}
+
+.toggle input { opacity: 0; width: 0; height: 0; }
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #333;
+  border-radius: 22px;
+  transition: 0.2s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: #e5e5e5;
+  border-radius: 50%;
+  transition: 0.2s;
+}
+
+.toggle input:checked + .toggle-slider {
+  background: #ef4444;
+}
+
+.toggle input:checked + .toggle-slider::before {
+  transform: translateX(18px);
+}
+
+/* ── Safety badge ── */
+.safety-badge {
+  background: #0a2a0a;
+  border: 1px solid #166534;
+  color: #4ade80;
+  font-size: 11px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* ── Buttons ── */
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.btn:hover { opacity: 0.85; }
+.btn:active { transform: scale(0.98); }
+
+.btn-primary {
+  background: #e5e5e5;
+  color: #0f0f0f;
+}
+
+.btn-secondary {
+  background: #252525;
+  color: #e5e5e5;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: #fff;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: #888;
+}
+
+.btn-full { width: 100%; }
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-row .btn { flex: 1; }
+
+/* ── Running / Status ── */
+.status-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.status-label {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.status-detail {
+  font-size: 12px;
+  color: #888;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #252525;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #ef4444;
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.progress-fill.scanning {
+  background: #f59e0b;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.stats {
+  display: flex;
+  gap: 20px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Done ── */
+.done-icon {
+  font-size: 36px;
+  text-align: center;
+}
+
+.done-title {
+  font-size: 18px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.done-count {
+  font-size: 14px;
+  color: #888;
+  text-align: center;
+}
+
+/* ── Error ── */
+.error-msg {
+  font-size: 12px;
+  color: #f87171;
+  background: #1c0a0a;
+  padding: 10px;
+  border-radius: 8px;
+  word-break: break-word;
+}
