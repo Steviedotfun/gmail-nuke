@@ -538,13 +538,12 @@ async function scanUnsubscribable() {
       }
     }
 
-    // Deep scan: paginate through subscription-heavy categories
-    const query = '(category:promotions OR category:social OR category:updates) -is:starred';
+    // Deep scan: every email with a List-Unsubscribe header
+    const query = 'has:list-unsubscribe -is:starred';
     let pageToken = null;
     let totalScanned = 0;
-    const MAX_SCAN = 3000;
 
-    while (totalScanned < MAX_SCAN) {
+    while (true) {
       const params = new URLSearchParams({
         q: query, maxResults: '100', fields: 'messages(id),nextPageToken',
       });
