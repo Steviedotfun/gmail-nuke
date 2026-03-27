@@ -513,6 +513,164 @@ async function saveSchedule(config) {
   return schedule;
 }
 
+// ── Unsubscribe Scanner ───────────────────────────────────────────────────────
+
+async function scanUnsubscribable() {
+  const state = { status: 'running', senders: {}, scanned: 0, error: null };
+  await chrome.storage.local.set({ unsubScan: state });
+  startKeepAlive();
+
+  try {
+    // Seed from existing scan data if available
+    const { scan } = await chrome.storage.local.get('scan');
+    if (scan?.bySender) {
+      for (const [email, info] of Object.entries(scan.bySender)) {
+        if (info.unsubscribeUrl) {
+          state.senders[email] = {
+            email,
+            name: info.name,
+            count: info.count,
+            unsubscribeUrl: info.unsubscribeUrl,
+            method: classifyMethod(info.unsubscribeUrl, null),
+            status: 'pending',
+          };
+        }
+      }
+    }
+
+    // Deep scan: paginate through subscription-heavy categories
+    const query = '(category:promotions OR category:social OR category:updates) -is:starred';
+    let pageToken = null;
+    let totalScanned = 0;
+    const MAX_SCAN = 3000;
+
+    while (totalScanned < MAX_SCAN) {
+      const params = new URLSearchParams({
+        q: query, maxResults: '100', fields: 'messages(id),nextPageToken',
+      });
+      if (pageToken) params.set('pageToken', pageToken);
+
+      const listResult = await gmailFetch(`/messages?${params}`);
+      if (!listResult?.messages?.length) break;
+
+      const ids = listResult.messages.map((m) => m.id);
+
+      for (let i = 0; i < ids.length; i += 10) {
+        const batch = ids.slice(i, i + 10);
+        const results = await Promise.all(
+          batch.map((id) =>
+            gmailFetch(
+              `/messages/${id}?format=metadata` +
+              `&metadataHeaders=From&metadataHeaders=List-Unsubscribe&metadataHeaders=List-Unsubscribe-Post` +
+              `&fields=payload/headers`
+            ).catch(() => null)
+          )
+        );
+
+        for (const msg of results) {
+          if (!msg?.payload?.headers) continue;
+          const h = msg.payload.headers;
+          const fromHdr = h.find((x) => x.name === 'From');
+          const unsubHdr = h.find((x) => x.name === 'List-Unsubscribe');
+          const postHdr = h.find((x) => x.name === 'List-Unsubscribe-Post');
+          if (!fromHdr || !unsubHdr) continue;
+
+          const { email, name } = parseFrom(fromHdr.value);
+          const url = parseUnsubscribe(unsubHdr.value);
+          if (!url) continue;
+
+          if (!state.senders[email]) {
+            state.senders[email] = {
+              email, name, count: 0,
+              unsubscribeUrl: url,
+              method: classifyMethod(url, postHdr?.value),
+              status: 'pending',
+            };
+          }
+          state.senders[email].count++;
+        }
+
+        totalScanned += batch.length;
+        state.scanned = totalScanned;
+        await chrome.storage.local.set({ unsubScan: state });
+        await sleep(80);
+      }
+
+      pageToken = listResult.nextPageToken;
+      if (!pageToken) break;
+      await sleep(150);
+    }
+
+    state.status = 'done';
+    await chrome.storage.local.set({ unsubScan: state });
+    stopKeepAlive();
+    chrome.runtime.sendMessage({ type: 'unsub-scan-done' }).catch(() => {});
+  } catch (err) {
+    state.status = 'error';
+    state.error = err.message;
+    await chrome.storage.local.set({ unsubScan: state });
+    stopKeepAlive();
+    chrome.runtime.sendMessage({ type: 'unsub-scan-done' }).catch(() => {});
+  }
+}
+
+function classifyMethod(url, postHeader) {
+  if (!url) return 'unknown';
+  if (url.startsWith('mailto:')) return 'mailto';
+  if (postHeader?.includes('One-Click')) return 'one-click';
+  return 'http';
+}
+
+// ── Unsubscribe Executor ──────────────────────────────────────────────────────
+
+async function executeUnsubscribes(emails) {
+  // emails = array of { email, unsubscribeUrl, method, name }
+  const { unsubScan } = await chrome.storage.local.get('unsubScan');
+
+  for (const sender of emails) {
+    let newStatus = 'error';
+    try {
+      const { url, method } = { url: sender.unsubscribeUrl, method: sender.method };
+
+      if (method === 'one-click' && url?.startsWith('http')) {
+        // RFC 8058 — silent automated POST, no tab needed
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'List-Unsubscribe=One-Click',
+        });
+        newStatus = (res.ok || res.status < 500) ? 'done' : 'error';
+      } else if (url?.startsWith('http')) {
+        // HTTP link — open in background tab
+        chrome.tabs.create({ url, active: false });
+        newStatus = 'opened';
+      } else if (url?.startsWith('mailto:')) {
+        // Open mailto — user's mail client or Gmail compose handles it
+        chrome.tabs.create({ url, active: false });
+        newStatus = 'opened';
+      }
+    } catch (_) {
+      newStatus = 'error';
+    }
+
+    // Persist status
+    if (unsubScan?.senders?.[sender.email]) {
+      unsubScan.senders[sender.email].status = newStatus;
+      await chrome.storage.local.set({ unsubScan });
+    }
+
+    chrome.runtime.sendMessage({
+      type: 'unsub-progress',
+      email: sender.email,
+      status: newStatus,
+    }).catch(() => {});
+
+    await sleep(400);
+  }
+
+  chrome.runtime.sendMessage({ type: 'unsub-done' }).catch(() => {});
+}
+
 // ── Keep-alive ────────────────────────────────────────────────────────────────
 
 function startKeepAlive() { chrome.alarms.create('keepAlive', { periodInMinutes: 0.4 }); }
@@ -553,6 +711,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       case 'unsubscribe':
         if (msg.url) chrome.tabs.create({ url: msg.url });
         return { ok: true };
+      case 'scan-unsub': scanUnsubscribable(); return { ok: true };
+      case 'get-unsub-scan': { const { unsubScan } = await chrome.storage.local.get('unsubScan'); return unsubScan || null; }
+      case 'clear-unsub-scan': await chrome.storage.local.remove('unsubScan'); return { ok: true };
+      case 'execute-unsubs': executeUnsubscribes(msg.senders); return { ok: true };
       case 'auth-test': { const token = await getToken(); return { ok: !!token }; }
       default: return { error: 'Unknown message type' };
     }

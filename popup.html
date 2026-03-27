@@ -145,6 +145,16 @@
       </div>
     </div>
 
+    <!-- Subscriptions entry button -->
+    <button id="open-unsub-btn" class="unsub-entry-btn">
+      <span class="unsub-entry-icon">📧</span>
+      <div class="unsub-entry-text">
+        <span class="unsub-entry-title">Manage Subscriptions</span>
+        <span class="unsub-entry-sub">Find and cancel all email subscriptions at once</span>
+      </div>
+      <span class="unsub-entry-arrow">›</span>
+    </button>
+
     <!-- Action Bar -->
     <div class="action-bar">
       <div class="safety-badge">🛡️ Starred &amp; Important always protected</div>
@@ -159,6 +169,63 @@
         <button id="dry-run-btn" class="btn btn-secondary">Preview</button>
         <button id="start-btn" class="btn btn-danger" style="flex:2">Delete Selected</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ═══ Subscriptions Manager ═══ -->
+  <div id="unsub-screen" class="screen hidden">
+    <div class="header">
+      <button id="unsub-back-btn" class="btn-icon" title="Back">‹</button>
+      <div class="logo">Subscriptions</div>
+      <button id="unsub-rescan-btn" class="btn-icon" title="Re-scan">↻</button>
+    </div>
+
+    <!-- Scanning state -->
+    <div id="unsub-scanning" class="hidden">
+      <div class="scan-anim"><div class="scan-ring"></div></div>
+      <div class="status-label center">Scanning for subscriptions...</div>
+      <div class="status-detail center" id="unsub-scan-detail">Reading your email headers</div>
+    </div>
+
+    <!-- Results state -->
+    <div id="unsub-results" class="hidden">
+      <div class="unsub-toolbar">
+        <div class="unsub-found" id="unsub-found">0 subscriptions found</div>
+        <button id="unsub-select-all" class="btn-tiny">Select All</button>
+      </div>
+
+      <div class="unsub-legend">
+        <span class="method-badge one-click">⚡ Auto</span> silent POST &nbsp;
+        <span class="method-badge http">🔗 Web</span> opens tab &nbsp;
+        <span class="method-badge mailto">✉️ Email</span> mailto
+      </div>
+
+      <div id="unsub-list" class="unsub-list"></div>
+
+      <div class="unsub-action-bar">
+        <div class="unsub-selected-count" id="unsub-selected-count">0 selected</div>
+        <button id="unsub-execute-btn" class="btn btn-danger btn-full" disabled>
+          Unsubscribe from Selected
+        </button>
+      </div>
+    </div>
+
+    <!-- Executing state -->
+    <div id="unsub-executing" class="hidden">
+      <div class="status-label" style="margin-bottom:8px">Unsubscribing...</div>
+      <div class="progress-bar" style="margin-bottom:12px"><div class="progress-fill" id="unsub-progress-fill"></div></div>
+      <div id="unsub-live-list" class="unsub-list"></div>
+    </div>
+
+    <!-- Done state -->
+    <div id="unsub-done" class="hidden">
+      <div class="done-hero">
+        <div class="done-icon">✅</div>
+        <div class="done-title" id="unsub-done-title">Done!</div>
+        <div class="done-count" id="unsub-done-summary"></div>
+      </div>
+      <div id="unsub-done-list" class="unsub-list" style="margin-top:8px"></div>
+      <button id="unsub-done-back" class="btn btn-primary btn-full" style="margin-top:10px">Back to Dashboard</button>
     </div>
   </div>
 

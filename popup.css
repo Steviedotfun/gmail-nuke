@@ -244,6 +244,70 @@ body::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
 .breakdown-count { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .breakdown-type { font-size: 10px; color: #444; margin-left: 6px; }
 
+/* ── Subscriptions entry button ── */
+.unsub-entry-btn {
+  width: 100%; background: #111; border: 1px solid #1e1e1e;
+  border-radius: 10px; padding: 10px 12px; cursor: pointer;
+  display: flex; align-items: center; gap: 10px;
+  transition: background 0.12s, border-color 0.12s; text-align: left;
+}
+.unsub-entry-btn:hover { background: #151515; border-color: #2a2a2a; }
+.unsub-entry-icon { font-size: 20px; flex-shrink: 0; }
+.unsub-entry-text { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.unsub-entry-title { font-size: 12.5px; font-weight: 700; color: #e5e5e5; }
+.unsub-entry-sub { font-size: 10px; color: #555; }
+.unsub-entry-arrow { font-size: 18px; color: #444; flex-shrink: 0; }
+
+/* ── Subscriptions manager ── */
+.unsub-toolbar {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+}
+.unsub-found { font-size: 11px; color: #666; font-weight: 600; }
+
+.unsub-legend {
+  font-size: 10px; color: #444; margin-bottom: 6px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+}
+
+.method-badge {
+  font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+}
+.method-badge.one-click { background: #0a2a0a; color: #4ade80; border: 1px solid #1a4a1a; }
+.method-badge.http      { background: #0a1a2a; color: #60a5fa; border: 1px solid #1a3a5a; }
+.method-badge.mailto    { background: #1e1a0a; color: #fbbf24; border: 1px solid #3a3010; }
+
+.unsub-list {
+  display: flex; flex-direction: column; gap: 2px;
+  max-height: 240px; overflow-y: auto;
+}
+.unsub-list::-webkit-scrollbar { width: 3px; }
+.unsub-list::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+.unsub-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: 8px;
+  transition: background 0.1s; cursor: pointer;
+}
+.unsub-row:hover { background: #131313; }
+.unsub-row input[type="checkbox"] { width: 13px; height: 13px; accent-color: #ef4444; flex-shrink: 0; }
+.unsub-row-info { flex: 1; min-width: 0; }
+.unsub-row-name { font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.unsub-row-email { font-size: 10px; color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.unsub-row-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.unsub-row-count { font-size: 10px; color: #555; font-variant-numeric: tabular-nums; }
+
+/* Status icons on unsub rows */
+.unsub-status { font-size: 13px; flex-shrink: 0; }
+.unsub-status.done    { color: #4ade80; }
+.unsub-status.opened  { color: #60a5fa; }
+.unsub-status.pending { color: #444; }
+.unsub-status.error   { color: #f87171; }
+
+.unsub-action-bar {
+  display: flex; flex-direction: column; gap: 6px;
+  padding-top: 10px; border-top: 1px solid #151515; margin-top: 6px;
+}
+.unsub-selected-count { font-size: 11px; color: #666; text-align: center; }
+
 /* ── Error ── */
 .error-msg {
   font-size: 11px; color: #f87171; background: #150a0a;

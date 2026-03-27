@@ -617,11 +617,233 @@ document.getElementById('error-reset-btn').addEventListener('click', async () =>
   renderFromJob(null);
 });
 
+// ── Subscriptions Manager ─────────────────────────────────────────────────────
+
+document.getElementById('open-unsub-btn').addEventListener('click', async () => {
+  showScreen('unsub');
+  const existing = await send({ type: 'get-unsub-scan' });
+  if (existing?.status === 'done') {
+    renderUnsubResults(existing);
+  } else if (existing?.status === 'running') {
+    showUnsubState('scanning');
+    pollUnsubScan();
+  } else {
+    showUnsubState('scanning');
+    await send({ type: 'scan-unsub' });
+    pollUnsubScan();
+  }
+});
+
+document.getElementById('unsub-back-btn').addEventListener('click', async () => {
+  const scan = await send({ type: 'get-scan' });
+  if (scan?.status === 'done') renderDashboard(scan);
+  else showScreen('dashboard');
+});
+
+document.getElementById('unsub-done-back').addEventListener('click', async () => {
+  const scan = await send({ type: 'get-scan' });
+  if (scan?.status === 'done') renderDashboard(scan);
+  else showScreen('dashboard');
+});
+
+document.getElementById('unsub-rescan-btn').addEventListener('click', async () => {
+  await send({ type: 'clear-unsub-scan' });
+  showUnsubState('scanning');
+  await send({ type: 'scan-unsub' });
+  pollUnsubScan();
+});
+
+function showUnsubState(state) {
+  ['unsub-scanning', 'unsub-results', 'unsub-executing', 'unsub-done'].forEach((id) => {
+    document.getElementById(id).classList.add('hidden');
+  });
+  document.getElementById(`unsub-${state}`)?.classList.remove('hidden');
+}
+
+// ── Scan polling ──
+
+let unsubScanPoll = null;
+
+function pollUnsubScan() {
+  clearInterval(unsubScanPoll);
+  unsubScanPoll = setInterval(async () => {
+    const state = await send({ type: 'get-unsub-scan' });
+    if (!state) return;
+    const detail = document.getElementById('unsub-scan-detail');
+    if (state.status === 'running') {
+      const count = Object.keys(state.senders || {}).length;
+      if (detail) detail.textContent = `Scanned ${state.scanned?.toLocaleString() || 0} emails · Found ${count} subscriptions`;
+    } else if (state.status === 'done') {
+      clearInterval(unsubScanPoll);
+      renderUnsubResults(state);
+    } else if (state.status === 'error') {
+      clearInterval(unsubScanPoll);
+      showScreen('error');
+      document.getElementById('error-msg').textContent = state.error || 'Subscription scan failed';
+    }
+  }, 900);
+}
+
+// ── Render results ──
+
+function renderUnsubResults(state) {
+  showUnsubState('results');
+
+  const senders = Object.values(state.senders || {})
+    .filter((s) => s.unsubscribeUrl)
+    .sort((a, b) => b.count - a.count);
+
+  document.getElementById('unsub-found').textContent =
+    `${senders.length} subscription${senders.length !== 1 ? 's' : ''} found`;
+
+  const list = document.getElementById('unsub-list');
+  list.innerHTML = '';
+
+  const METHOD_BADGE = {
+    'one-click': '<span class="method-badge one-click">⚡ Auto</span>',
+    'http':      '<span class="method-badge http">🔗 Web</span>',
+    'mailto':    '<span class="method-badge mailto">✉️ Email</span>',
+  };
+
+  for (const s of senders) {
+    const displayName = s.name && s.name !== s.email ? s.name : '';
+    const badge = METHOD_BADGE[s.method] || '';
+    list.innerHTML += `
+      <label class="unsub-row" data-email="${escHtml(s.email)}">
+        <input type="checkbox" class="unsub-chk" data-email="${escHtml(s.email)}" checked />
+        <div class="unsub-row-info">
+          <div class="unsub-row-name">${escHtml(displayName || s.email)}</div>
+          ${displayName ? `<div class="unsub-row-email">${escHtml(s.email)}</div>` : ''}
+        </div>
+        <div class="unsub-row-right">
+          ${badge}
+          <span class="unsub-row-count">~${fmt(s.count)}</span>
+        </div>
+      </label>`;
+  }
+
+  updateUnsubCount();
+
+  // Attach listeners to update count on change
+  list.querySelectorAll('.unsub-chk').forEach((cb) => {
+    cb.addEventListener('change', updateUnsubCount);
+  });
+}
+
+function updateUnsubCount() {
+  const checked = document.querySelectorAll('.unsub-chk:checked').length;
+  document.getElementById('unsub-selected-count').textContent =
+    checked === 0 ? 'None selected' : `${checked} selected`;
+  document.getElementById('unsub-execute-btn').disabled = checked === 0;
+}
+
+// ── Select All ──
+
+let allSelected = false;
+document.getElementById('unsub-select-all').addEventListener('click', () => {
+  allSelected = !allSelected;
+  document.querySelectorAll('.unsub-chk').forEach((cb) => { cb.checked = allSelected; });
+  document.getElementById('unsub-select-all').textContent = allSelected ? 'Deselect All' : 'Select All';
+  updateUnsubCount();
+});
+
+// ── Execute ──
+
+document.getElementById('unsub-execute-btn').addEventListener('click', async () => {
+  const state = await send({ type: 'get-unsub-scan' });
+  const allSenders = Object.values(state?.senders || {});
+
+  const selected = [...document.querySelectorAll('.unsub-chk:checked')]
+    .map((cb) => cb.dataset.email)
+    .map((email) => allSenders.find((s) => s.email === email))
+    .filter(Boolean);
+
+  if (!selected.length) return;
+
+  // Build live list
+  showUnsubState('executing');
+  const liveList = document.getElementById('unsub-live-list');
+  liveList.innerHTML = '';
+
+  const METHOD_LABEL = { 'one-click': '⚡ Auto', http: '🔗 Web', mailto: '✉️ Email' };
+
+  for (const s of selected) {
+    const displayName = s.name && s.name !== s.email ? s.name : s.email;
+    liveList.innerHTML += `
+      <div class="unsub-row" id="unsub-live-${s.email.replace(/[^a-z0-9]/gi, '_')}">
+        <div class="unsub-row-info">
+          <div class="unsub-row-name">${escHtml(displayName)}</div>
+        </div>
+        <div class="unsub-row-right">
+          <span class="unsub-row-count">${METHOD_LABEL[s.method] || ''}</span>
+          <span class="unsub-status pending" id="unsub-stat-${s.email.replace(/[^a-z0-9]/gi, '_')}">○</span>
+        </div>
+      </div>`;
+  }
+
+  const fill = document.getElementById('unsub-progress-fill');
+  let doneCount = 0;
+
+  // Store progress handler ref so we can remove it
+  window._unsubProgressHandler = (msg) => {
+    if (msg.type !== 'unsub-progress') return;
+    const safeId = msg.email.replace(/[^a-z0-9]/gi, '_');
+    const el = document.getElementById(`unsub-stat-${safeId}`);
+    if (el) {
+      el.className = `unsub-status ${msg.status}`;
+      el.textContent = msg.status === 'done' ? '✓' : msg.status === 'opened' ? '🔗' : '✗';
+    }
+    doneCount++;
+    fill.style.width = `${Math.round((doneCount / selected.length) * 100)}%`;
+  };
+
+  window._unsubDoneHandler = (msg) => {
+    if (msg.type !== 'unsub-done') return;
+    renderUnsubDone(selected);
+  };
+
+  await send({ type: 'execute-unsubs', senders: selected });
+});
+
+function renderUnsubDone(processed) {
+  showUnsubState('done');
+  const autoCount = processed.filter((s) => s.method === 'one-click').length;
+  const webCount = processed.filter((s) => s.method !== 'one-click').length;
+
+  document.getElementById('unsub-done-title').textContent = 'Unsubscribed!';
+  const parts = [];
+  if (autoCount) parts.push(`${autoCount} auto-unsubscribed`);
+  if (webCount) parts.push(`${webCount} tabs opened`);
+  document.getElementById('unsub-done-summary').textContent = parts.join(' · ');
+
+  const doneList = document.getElementById('unsub-done-list');
+  doneList.innerHTML = '';
+  for (const s of processed) {
+    const name = s.name && s.name !== s.email ? s.name : s.email;
+    const icon = s.method === 'one-click' ? '✓' : '🔗';
+    const statusClass = s.method === 'one-click' ? 'done' : 'opened';
+    doneList.innerHTML += `
+      <div class="unsub-row">
+        <div class="unsub-row-info"><div class="unsub-row-name">${escHtml(name)}</div></div>
+        <span class="unsub-status ${statusClass}">${icon}</span>
+      </div>`;
+  }
+}
+
 // ── Live updates from service worker ─────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'job-update' && msg.job) renderFromJob(msg.job);
   if (msg.type === 'scan-update') {
     send({ type: 'get-scan' }).then((s) => { if (s?.status === 'done') renderDashboard(s); });
+  }
+  if (msg.type === 'unsub-scan-done') {
+    send({ type: 'get-unsub-scan' }).then((s) => { if (s?.status === 'done') renderUnsubResults(s); });
+  }
+  if (msg.type === 'unsub-progress' && window._unsubProgressHandler) {
+    window._unsubProgressHandler(msg);
+  }
+  if (msg.type === 'unsub-done' && window._unsubDoneHandler) {
+    window._unsubDoneHandler(msg);
   }
 });
