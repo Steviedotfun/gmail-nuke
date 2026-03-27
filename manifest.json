@@ -1,15 +1,18 @@
 {
   "manifest_version": 3,
   "name": "Gmail Nuke",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Mass delete old and junk Gmail emails while protecting starred and important ones.",
   "permissions": [
     "identity",
     "storage",
-    "alarms"
+    "alarms",
+    "notifications",
+    "tabs"
   ],
   "host_permissions": [
-    "https://gmail.googleapis.com/*"
+    "https://gmail.googleapis.com/*",
+    "https://www.googleapis.com/*"
   ],
   "background": {
     "service_worker": "service-worker.js"
@@ -23,7 +26,7 @@
     }
   },
   "oauth2": {
-    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "client_id": "646629423334-kkj8hlb69aspcshk99e215tvmg2ervv1.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/gmail.modify",
       "https://www.googleapis.com/auth/gmail.readonly"

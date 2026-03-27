@@ -10,25 +10,36 @@
   <!-- ═══ Auth ═══ -->
   <div id="auth-screen" class="screen hidden">
     <div class="header">
-      <div class="logo">Gmail Nuke</div>
-      <div class="logo-sub">Inbox cleanup tool</div>
+      <div>
+        <div class="logo">Gmail Nuke</div>
+        <div class="logo-sub">Inbox cleanup tool</div>
+      </div>
     </div>
     <p class="subtitle">Connect your Gmail to scan your inbox and start cleaning up.</p>
     <button id="auth-btn" class="btn btn-primary btn-full">Sign in with Google</button>
   </div>
 
-  <!-- ═══ Dashboard (post-scan) ═══ -->
+  <!-- ═══ Scanning ═══ -->
+  <div id="scanning-screen" class="screen hidden">
+    <div class="header"><div class="logo">Gmail Nuke</div></div>
+    <div class="scan-anim"><div class="scan-ring"></div></div>
+    <div class="status-label center">Scanning your inbox...</div>
+    <div class="status-detail center" id="scan-detail">This takes about 30 seconds</div>
+  </div>
+
+  <!-- ═══ Dashboard ═══ -->
   <div id="dashboard-screen" class="screen hidden">
     <div class="header">
       <div class="logo">Gmail Nuke</div>
       <button id="rescan-btn" class="btn-icon" title="Re-scan inbox">↻</button>
     </div>
 
-    <!-- Overview stats -->
+    <!-- Overview -->
     <div class="overview-grid">
       <div class="ov-card">
         <div class="ov-value" id="ov-total">—</div>
         <div class="ov-label">Total Emails</div>
+        <div class="ov-trend" id="ov-trend"></div>
       </div>
       <div class="ov-card">
         <div class="ov-value" id="ov-storage">—</div>
@@ -36,19 +47,21 @@
       </div>
       <div class="ov-card safe">
         <div class="ov-value" id="ov-starred">—</div>
-        <div class="ov-label">Starred</div>
+        <div class="ov-label">Starred 🔒</div>
       </div>
       <div class="ov-card safe">
         <div class="ov-value" id="ov-important">—</div>
-        <div class="ov-label">Important</div>
+        <div class="ov-label">Important 🔒</div>
       </div>
     </div>
 
     <!-- Tabs -->
     <div class="tabs">
-      <button class="tab active" data-tab="tab-years">By Year</button>
+      <button class="tab active" data-tab="tab-years">Years</button>
       <button class="tab" data-tab="tab-categories">Categories</button>
-      <button class="tab" data-tab="tab-senders">Top Senders</button>
+      <button class="tab" data-tab="tab-senders">Senders</button>
+      <button class="tab" data-tab="tab-custom">Custom</button>
+      <button class="tab" data-tab="tab-bigfiles">Big Files</button>
     </div>
 
     <!-- By Year -->
@@ -65,14 +78,76 @@
 
     <!-- Top Senders -->
     <div id="tab-senders" class="tab-panel hidden">
-      <div class="section-label">Biggest senders (sampled from junk)</div>
+      <div class="section-label">Top senders from junk categories</div>
       <div id="sender-list" class="checklist"></div>
     </div>
 
-    <!-- Actions -->
-    <div class="action-bar">
-      <div class="safety-badge">Starred &amp; Important always protected</div>
+    <!-- Custom Query -->
+    <div id="tab-custom" class="tab-panel hidden">
+      <div class="section-label">Gmail search query</div>
+      <textarea id="custom-query" class="query-input" placeholder="from:newsletter@site.com before:2023/01/01&#10;larger:10M -is:starred"></textarea>
+      <div class="section-label" style="margin-top:6px">Each line = separate query. Safety filters added automatically.</div>
+      <div class="btn-row" style="margin-top:8px">
+        <button id="custom-preview-btn" class="btn btn-secondary">Preview</button>
+        <button id="custom-delete-btn" class="btn btn-danger" style="flex:2">Delete Custom</button>
+      </div>
+    </div>
 
+    <!-- Big Files -->
+    <div id="tab-bigfiles" class="tab-panel hidden">
+      <div class="section-label">Attachments larger than 2 MB (not starred/important)</div>
+      <div id="bigfiles-list" class="checklist">
+        <button id="load-bigfiles-btn" class="btn btn-secondary btn-full" style="margin-top:4px">Load Large Emails</button>
+      </div>
+      <div class="btn-row" id="bigfiles-actions" style="margin-top:8px;display:none">
+        <button id="bigfiles-delete-btn" class="btn btn-danger btn-full">Delete Selected</button>
+      </div>
+    </div>
+
+    <!-- Auto Clean Schedule -->
+    <div class="schedule-section">
+      <button class="schedule-header" id="schedule-toggle">
+        <span>Auto Clean</span>
+        <div class="schedule-header-right">
+          <span class="schedule-status" id="schedule-status-badge"></span>
+          <span class="chevron" id="schedule-chevron">▼</span>
+        </div>
+      </button>
+      <div id="schedule-body" class="schedule-body hidden">
+        <div class="toggle-row">
+          <span>Enable auto clean</span>
+          <label class="toggle">
+            <input type="checkbox" id="schedule-enabled" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="schedule-config" id="schedule-config">
+          <div class="section-label">Frequency</div>
+          <div class="freq-pills">
+            <button class="freq-pill active" data-freq="daily">Daily</button>
+            <button class="freq-pill" data-freq="weekly">Weekly</button>
+            <button class="freq-pill" data-freq="monthly">Monthly</button>
+          </div>
+
+          <div class="section-label" style="margin-top:8px">What to clean</div>
+          <div class="sched-cats">
+            <label class="check-item"><input type="checkbox" class="sched-cat" data-query="category:promotions -is:starred -is:important" data-label="Promotions" checked /><span class="item-label">Promotions</span></label>
+            <label class="check-item"><input type="checkbox" class="sched-cat" data-query="category:social -is:starred -is:important" data-label="Social" /><span class="item-label">Social</span></label>
+            <label class="check-item"><input type="checkbox" class="sched-cat" data-query="category:updates -is:starred -is:important" data-label="Updates" checked /><span class="item-label">Updates</span></label>
+            <label class="check-item"><input type="checkbox" class="sched-cat" data-query="category:forums -is:starred -is:important" data-label="Forums" /><span class="item-label">Forums</span></label>
+            <label class="check-item"><input type="checkbox" class="sched-cat" data-query="in:spam -is:starred -is:important" data-label="Spam" checked /><span class="item-label">Spam</span></label>
+          </div>
+
+          <div class="schedule-meta" id="schedule-meta"></div>
+          <button id="save-schedule-btn" class="btn btn-primary btn-full" style="margin-top:8px">Save Schedule</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Bar -->
+    <div class="action-bar">
+      <div class="safety-badge">🛡️ Starred &amp; Important always protected</div>
       <div class="toggle-row">
         <span id="mode-label">Move to Trash</span>
         <label class="toggle">
@@ -80,7 +155,6 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
-
       <div class="btn-row">
         <button id="dry-run-btn" class="btn btn-secondary">Preview</button>
         <button id="start-btn" class="btn btn-danger" style="flex:2">Delete Selected</button>
@@ -88,34 +162,17 @@
     </div>
   </div>
 
-  <!-- ═══ Scanning inbox ═══ -->
-  <div id="scanning-screen" class="screen hidden">
-    <div class="header">
-      <div class="logo">Gmail Nuke</div>
-    </div>
-    <div class="scan-anim">
-      <div class="scan-ring"></div>
-    </div>
-    <div class="status-label center" id="scan-status">Scanning your inbox...</div>
-    <div class="status-detail center" id="scan-detail">This takes about 30 seconds</div>
-  </div>
-
-  <!-- ═══ Running delete job ═══ -->
+  <!-- ═══ Running ═══ -->
   <div id="running-screen" class="screen hidden">
     <div class="header"><div class="logo">Gmail Nuke</div></div>
     <div class="status-area">
       <div class="status-label" id="status-label">Scanning...</div>
-      <div class="status-detail" id="status-detail">Looking for emails to delete</div>
+      <div class="status-detail" id="status-detail"></div>
       <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
       <div class="stats">
-        <div class="stat">
-          <span class="stat-value" id="stat-scanned">0</span>
-          <span class="stat-label">Found</span>
-        </div>
-        <div class="stat">
-          <span class="stat-value" id="stat-deleted">0</span>
-          <span class="stat-label">Deleted</span>
-        </div>
+        <div class="stat"><span class="stat-value" id="stat-scanned">0</span><span class="stat-label">Found</span></div>
+        <div class="stat"><span class="stat-value" id="stat-deleted">0</span><span class="stat-label">Deleted</span></div>
+        <div class="stat"><span class="stat-value" id="stat-freed">—</span><span class="stat-label">Freed</span></div>
       </div>
     </div>
     <div class="btn-row">
@@ -130,14 +187,8 @@
     <div class="status-area">
       <div class="status-label">Paused</div>
       <div class="stats">
-        <div class="stat">
-          <span class="stat-value" id="paused-scanned">0</span>
-          <span class="stat-label">Found</span>
-        </div>
-        <div class="stat">
-          <span class="stat-value" id="paused-deleted">0</span>
-          <span class="stat-label">Deleted</span>
-        </div>
+        <div class="stat"><span class="stat-value" id="paused-scanned">0</span><span class="stat-label">Found</span></div>
+        <div class="stat"><span class="stat-value" id="paused-deleted">0</span><span class="stat-label">Deleted</span></div>
       </div>
     </div>
     <div class="btn-row">
@@ -149,9 +200,13 @@
   <!-- ═══ Done ═══ -->
   <div id="done-screen" class="screen hidden">
     <div class="header"><div class="logo">Gmail Nuke</div></div>
-    <div class="done-icon" id="done-icon">✅</div>
-    <div class="done-title" id="done-title">Done!</div>
-    <div class="done-count" id="done-count">0 emails deleted</div>
+    <div class="done-hero">
+      <div class="done-icon" id="done-icon">✅</div>
+      <div class="done-title" id="done-title">Done!</div>
+      <div class="done-count" id="done-count"></div>
+      <div class="done-freed" id="done-freed"></div>
+    </div>
+    <div id="done-breakdown" class="done-breakdown"></div>
     <button id="reset-btn" class="btn btn-primary btn-full">Back to Dashboard</button>
   </div>
 

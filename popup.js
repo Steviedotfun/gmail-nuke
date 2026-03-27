@@ -1,10 +1,11 @@
-// ── Gmail Nuke — Popup UI ──
+// ── Gmail Nuke — Popup v2 ──
 
 const SAFETY = '-is:starred -is:important';
 
-// ── Helpers ──
+// ── Utilities ─────────────────────────────────────────────────────────────────
 
 function fmt(n) {
+  if (n == null) return '—';
   if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
   if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
   return String(n);
@@ -17,17 +18,42 @@ function fmtBytes(bytes) {
   return (bytes / 1024).toFixed(0) + ' KB';
 }
 
+function fmtDate(ts) {
+  if (!ts) return null;
+  const d = new Date(ts);
+  const now = new Date();
+  const days = Math.floor((now - d) / 86400000);
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 30) return `${days} days ago`;
+  return d.toLocaleDateString();
+}
+
+function fmtDuration(ms) {
+  const days = Math.floor(ms / 86400000);
+  const hours = Math.floor((ms % 86400000) / 3600000);
+  if (days > 0) return `in ${days}d`;
+  if (hours > 0) return `in ${hours}h`;
+  return 'soon';
+}
+
 function countClass(n) {
   if (n >= 5000) return 'extreme';
   if (n >= 1000) return 'high';
   return '';
 }
 
-function send(msg) {
-  return new Promise((resolve) => chrome.runtime.sendMessage(msg, resolve));
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
 }
 
-// ── Screens ──
+function send(msg) {
+  return new Promise((resolve) => chrome.runtime.sendMessage(msg, (r) => resolve(r)));
+}
+
+// ── Screen management ─────────────────────────────────────────────────────────
 
 const screens = {};
 document.querySelectorAll('.screen').forEach((el) => {
@@ -39,23 +65,18 @@ function showScreen(name) {
   screens[name]?.classList.remove('hidden');
 }
 
-// ── Init ──
+// ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const authResult = await send({ type: 'auth-test' }).catch(() => null);
-  if (!authResult?.ok) {
-    showScreen('auth');
-    return;
-  }
+  const auth = await send({ type: 'auth-test' }).catch(() => null);
+  if (!auth?.ok) { showScreen('auth'); return; }
 
-  // Check for running delete job
   const job = await send({ type: 'get-job' });
-  if (job && job.status !== 'idle') {
+  if (job && job.status !== 'idle' && job.status !== 'done' && job.status !== 'error') {
     renderFromJob(job);
     return;
   }
 
-  // Check for existing scan
   const scan = await send({ type: 'get-scan' });
   if (scan?.status === 'done') {
     renderDashboard(scan);
@@ -63,25 +84,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     showScreen('scanning');
     pollScan();
   } else {
-    // Auto-scan on first use
     showScreen('scanning');
     await send({ type: 'scan' });
     pollScan();
   }
 });
-
-// ── Auth ──
 
 document.getElementById('auth-btn').addEventListener('click', async () => {
-  const result = await send({ type: 'auth-test' });
-  if (result?.ok) {
+  const r = await send({ type: 'auth-test' });
+  if (r?.ok) {
     showScreen('scanning');
     await send({ type: 'scan' });
     pollScan();
   }
 });
 
-// ── Scan polling ──
+// ── Scan polling ──────────────────────────────────────────────────────────────
 
 let scanPoll = null;
 
@@ -90,10 +108,9 @@ function pollScan() {
   scanPoll = setInterval(async () => {
     const scan = await send({ type: 'get-scan' });
     if (!scan) return;
-
     if (scan.status === 'running') {
-      document.getElementById('scan-detail').textContent =
-        scan.totalEmails ? `Found ${fmt(scan.totalEmails)} emails so far...` : 'Connecting to Gmail...';
+      const det = document.getElementById('scan-detail');
+      if (det) det.textContent = scan.totalEmails ? `Found ${fmt(scan.totalEmails)} emails so far...` : 'Connecting to Gmail...';
     } else if (scan.status === 'done') {
       clearInterval(scanPoll);
       renderDashboard(scan);
@@ -102,12 +119,12 @@ function pollScan() {
       showScreen('error');
       document.getElementById('error-msg').textContent = scan.error || 'Scan failed';
     }
-  }, 800);
+  }, 900);
 }
 
-// ── Dashboard ──
+// ── Dashboard ─────────────────────────────────────────────────────────────────
 
-function renderDashboard(scan) {
+async function renderDashboard(scan) {
   showScreen('dashboard');
 
   // Overview
@@ -116,27 +133,39 @@ function renderDashboard(scan) {
   document.getElementById('ov-starred').textContent = fmt(scan.starred);
   document.getElementById('ov-important').textContent = fmt(scan.important);
 
-  // Years
+  // Trend from scan history
+  const history = await send({ type: 'get-scan-history' });
+  const trendEl = document.getElementById('ov-trend');
+  if (history?.length >= 2) {
+    const prev = history[history.length - 2].total;
+    const curr = scan.totalEmails;
+    const delta = prev - curr;
+    if (delta > 0) {
+      trendEl.textContent = `↓ ${fmt(delta)} from last scan`;
+      trendEl.className = 'ov-trend down';
+    } else if (delta < 0) {
+      trendEl.textContent = `↑ ${fmt(Math.abs(delta))} since last scan`;
+      trendEl.className = 'ov-trend up';
+    }
+  }
+
+  // Years tab
   const yearList = document.getElementById('year-list');
   yearList.innerHTML = '';
-  const years = Object.entries(scan.byYear)
-    .sort(([a], [b]) => Number(b) - Number(a));
-
   const currentYear = new Date().getFullYear();
-
+  const years = Object.entries(scan.byYear).sort(([a], [b]) => Number(b) - Number(a));
   for (const [year, count] of years) {
     if (count === 0) continue;
-    const id = `year-${year}`;
-    const checked = Number(year) < currentYear - 1 ? 'checked' : ''; // auto-check old years
+    const autoCheck = Number(year) < currentYear - 1;
     yearList.innerHTML += `
       <label class="check-item">
-        <input type="checkbox" id="${id}" data-query="after:${year}/01/01 before:${Number(year) + 1}/01/01 ${SAFETY}" ${checked} />
+        <input type="checkbox" data-query="after:${year}/01/01 before:${Number(year) + 1}/01/01 ${SAFETY}" data-label="${year}" ${autoCheck ? 'checked' : ''} />
         <span class="item-label">${year}</span>
         <span class="item-count ${countClass(count)}">~${fmt(count)}</span>
       </label>`;
   }
 
-  // Categories
+  // Categories tab
   const catList = document.getElementById('category-list');
   catList.innerHTML = '';
   const catQueries = {
@@ -146,55 +175,242 @@ function renderDashboard(scan) {
     Forums: 'category:forums',
     Spam: 'in:spam',
   };
-
   for (const [label, count] of Object.entries(scan.byCategory)) {
     if (count === 0) continue;
     const q = catQueries[label] || '';
-    const id = `cat-${label.toLowerCase()}`;
     catList.innerHTML += `
       <label class="check-item">
-        <input type="checkbox" id="${id}" data-query="${q} ${SAFETY}" checked />
+        <input type="checkbox" data-query="${q} ${SAFETY}" data-label="${label}" checked />
         <span class="item-label">${label}</span>
         <span class="item-count ${countClass(count)}">~${fmt(count)}</span>
       </label>`;
   }
 
-  // Top senders
+  // Senders tab
   const senderList = document.getElementById('sender-list');
   senderList.innerHTML = '';
-  const sortedSenders = Object.entries(scan.bySender)
+  const sorted = Object.entries(scan.bySender)
     .sort(([, a], [, b]) => b.count - a.count)
     .slice(0, 20);
 
-  if (sortedSenders.length === 0) {
-    senderList.innerHTML = '<div class="status-detail" style="padding:10px">No sender data yet. Re-scan for more data.</div>';
+  if (sorted.length === 0) {
+    senderList.innerHTML = '<div class="status-detail" style="padding:10px;color:#444">No sender data. Re-scan to load.</div>';
   }
-
-  for (const [email, info] of sortedSenders) {
-    const id = `sender-${email.replace(/[^a-z0-9]/g, '_')}`;
+  for (const [email, info] of sorted) {
     const displayName = info.name && info.name !== email ? info.name : '';
+    const hasUnsub = !!info.unsubscribeUrl;
+    const unsubUrl = escHtml(info.unsubscribeUrl || '');
     senderList.innerHTML += `
-      <label class="check-item">
-        <input type="checkbox" id="${id}" data-query="from:${email} ${SAFETY}" />
-        <div style="flex:1;min-width:0">
+      <div class="check-item">
+        <input type="checkbox" data-query="from:${email} ${SAFETY}" data-label="${escHtml(displayName || email)}" />
+        <div class="sender-info">
           <div class="sender-name">${escHtml(displayName || email)}</div>
           ${displayName ? `<div class="sender-email">${escHtml(email)}</div>` : ''}
         </div>
-        <span class="item-count ${countClass(info.count)}">~${fmt(info.count)}</span>
-      </label>`;
+        <div class="sender-actions">
+          <span class="item-count ${countClass(info.count)}">~${fmt(info.count)}</span>
+          ${hasUnsub ? `<button class="btn-tiny unsub" data-url="${unsubUrl}" onclick="unsubscribe(this)" title="Unsubscribe">Unsub</button>` : ''}
+          <button class="btn-tiny del" data-query="from:${email} ${SAFETY}" data-label="${escHtml(displayName || email)}" onclick="deleteSender(this)" title="Delete all from sender">🗑</button>
+        </div>
+      </div>`;
   }
 
-  // Init tabs
+  // Schedule
+  await loadScheduleUI();
+
+  // Tabs
   initTabs();
 }
 
-function escHtml(str) {
-  const d = document.createElement('div');
-  d.textContent = str;
-  return d.innerHTML;
+// ── Per-sender actions (global functions for inline onclick) ──────────────────
+
+window.unsubscribe = function (btn) {
+  const url = btn.dataset.url;
+  if (url) {
+    send({ type: 'unsubscribe', url });
+    btn.textContent = '✓';
+    btn.style.color = '#4ade80';
+    btn.disabled = true;
+  }
+};
+
+window.deleteSender = function (btn) {
+  send({
+    type: 'start',
+    config: {
+      queries: [{ label: btn.dataset.label, query: btn.dataset.query }],
+      useTrash: !document.getElementById('toggle-permanent').checked,
+      dryRun: false,
+    },
+  });
+  showScreen('running');
+  startJobPoll();
+};
+
+// ── Big Files tab ─────────────────────────────────────────────────────────────
+
+document.getElementById('load-bigfiles-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('load-bigfiles-btn');
+  btn.textContent = 'Loading...';
+  btn.disabled = true;
+
+  const { files } = await send({ type: 'get-big-files' });
+  const list = document.getElementById('bigfiles-list');
+  list.innerHTML = '';
+
+  if (!files?.length) {
+    list.innerHTML = '<div class="status-detail" style="padding:10px;color:#444">No large attachments found.</div>';
+    return;
+  }
+
+  for (const f of files) {
+    list.innerHTML += `
+      <div class="file-item">
+        <input type="checkbox" class="bigfile-chk" data-id="${f.id}" checked />
+        <div class="file-info">
+          <div class="file-subject">${escHtml(f.subject)}</div>
+          <div class="file-sender">${escHtml(f.sender)}</div>
+        </div>
+        <span class="file-size">${fmtBytes(f.size)}</span>
+      </div>`;
+  }
+
+  document.getElementById('bigfiles-actions').style.display = 'flex';
+});
+
+document.getElementById('bigfiles-delete-btn').addEventListener('click', async () => {
+  const checked = [...document.querySelectorAll('.bigfile-chk:checked')].map((c) => c.dataset.id);
+  if (!checked.length) return;
+  const useTrash = !document.getElementById('toggle-permanent').checked;
+  await send({ type: 'start-from-ids', config: { ids: checked, useTrash } });
+  showScreen('running');
+  startJobPoll();
+});
+
+// ── Custom query tab ──────────────────────────────────────────────────────────
+
+function getCustomQueries() {
+  const raw = document.getElementById('custom-query').value.trim();
+  if (!raw) return [];
+  return raw.split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      // Auto-append safety if not already present
+      const q = line.includes('-is:starred') ? line : `${line} ${SAFETY}`;
+      return { label: line.slice(0, 40), query: q };
+    });
 }
 
-// ── Tabs ──
+document.getElementById('custom-preview-btn').addEventListener('click', async () => {
+  const queries = getCustomQueries();
+  if (!queries.length) return;
+  await send({ type: 'start', config: { queries, useTrash: true, dryRun: true } });
+  showScreen('running');
+  startJobPoll();
+});
+
+document.getElementById('custom-delete-btn').addEventListener('click', async () => {
+  const queries = getCustomQueries();
+  if (!queries.length) return;
+  const useTrash = !document.getElementById('toggle-permanent').checked;
+  if (!useTrash && !confirm('Permanently delete emails matching these queries?\n\nThis cannot be undone.')) return;
+  await send({ type: 'start', config: { queries, useTrash, dryRun: false } });
+  showScreen('running');
+  startJobPoll();
+});
+
+// ── Schedule UI ───────────────────────────────────────────────────────────────
+
+async function loadScheduleUI() {
+  const schedule = await send({ type: 'get-schedule' });
+  if (!schedule) return;
+
+  document.getElementById('schedule-enabled').checked = !!schedule.enabled;
+  updateScheduleBadge(schedule.enabled);
+
+  // Frequency pills
+  const freq = schedule.frequency || 'weekly';
+  document.querySelectorAll('.freq-pill').forEach((p) => {
+    p.classList.toggle('active', p.dataset.freq === freq);
+  });
+
+  // Category checkboxes
+  if (schedule.queries?.length) {
+    const enabledQueries = new Set(schedule.queries.map((q) => q.query));
+    document.querySelectorAll('.sched-cat').forEach((cb) => {
+      cb.checked = enabledQueries.has(cb.dataset.query);
+    });
+  }
+
+  renderScheduleMeta(schedule);
+}
+
+function renderScheduleMeta(schedule) {
+  const meta = document.getElementById('schedule-meta');
+  if (!meta) return;
+  const lines = [];
+  if (schedule.lastRun) {
+    lines.push(`Last run: <span>${fmtDate(schedule.lastRun)}</span>${schedule.lastRunCount != null ? ` · <span>${schedule.lastRunCount.toLocaleString()} deleted</span>` : ''}`);
+  }
+  if (schedule.enabled && schedule.lastRun) {
+    const freqMs = { daily: 86400000, weekly: 604800000, monthly: 2592000000 }[schedule.frequency] || 604800000;
+    const next = schedule.lastRun + freqMs;
+    lines.push(`Next run: <span>${fmtDuration(next - Date.now())}</span>`);
+  } else if (schedule.enabled && !schedule.lastRun) {
+    lines.push(`Next run: <span>on next Chrome open</span>`);
+  }
+  meta.innerHTML = lines.join('<br>');
+}
+
+function updateScheduleBadge(enabled) {
+  const badge = document.getElementById('schedule-status-badge');
+  badge.textContent = enabled ? 'ON' : 'OFF';
+  badge.className = `schedule-status ${enabled ? 'on' : 'off'}`;
+}
+
+// Schedule accordion toggle
+document.getElementById('schedule-toggle').addEventListener('click', () => {
+  const body = document.getElementById('schedule-body');
+  const chevron = document.getElementById('schedule-chevron');
+  const isOpen = !body.classList.contains('hidden');
+  body.classList.toggle('hidden', isOpen);
+  chevron.classList.toggle('open', !isOpen);
+});
+
+// Enable toggle
+document.getElementById('schedule-enabled').addEventListener('change', (e) => {
+  updateScheduleBadge(e.target.checked);
+});
+
+// Frequency pills
+document.querySelectorAll('.freq-pill').forEach((pill) => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.freq-pill').forEach((p) => p.classList.remove('active'));
+    pill.classList.add('active');
+  });
+});
+
+// Save schedule
+document.getElementById('save-schedule-btn').addEventListener('click', async () => {
+  const enabled = document.getElementById('schedule-enabled').checked;
+  const frequency = document.querySelector('.freq-pill.active')?.dataset.freq || 'weekly';
+  const queries = [...document.querySelectorAll('.sched-cat:checked')].map((cb) => ({
+    label: cb.dataset.label,
+    query: cb.dataset.query,
+  }));
+
+  const schedule = await send({ type: 'save-schedule', schedule: { enabled, frequency, queries } });
+
+  updateScheduleBadge(enabled);
+  renderScheduleMeta(schedule);
+
+  const btn = document.getElementById('save-schedule-btn');
+  btn.textContent = 'Saved ✓';
+  setTimeout(() => { btn.textContent = 'Save Schedule'; }, 1500);
+});
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
 
 function initTabs() {
   document.querySelectorAll('.tab').forEach((tab) => {
@@ -207,7 +423,7 @@ function initTabs() {
   });
 }
 
-// ── Re-scan ──
+// ── Rescan ────────────────────────────────────────────────────────────────────
 
 document.getElementById('rescan-btn').addEventListener('click', async () => {
   await send({ type: 'clear-scan' });
@@ -216,7 +432,7 @@ document.getElementById('rescan-btn').addEventListener('click', async () => {
   pollScan();
 });
 
-// ── Toggle permanent ──
+// ── Permanent delete toggle ───────────────────────────────────────────────────
 
 document.getElementById('toggle-permanent').addEventListener('change', (e) => {
   const label = document.getElementById('mode-label');
@@ -224,65 +440,47 @@ document.getElementById('toggle-permanent').addEventListener('change', (e) => {
   label.style.color = e.target.checked ? '#ef4444' : '';
 });
 
-// ── Collect selected queries ──
+// ── Collect queries from checked boxes across all content tabs ────────────────
 
 function getSelectedQueries() {
   const queries = [];
   const seen = new Set();
-
-  document.querySelectorAll('.tab-panel input[type="checkbox"]:checked').forEach((cb) => {
+  // Years, categories, senders tabs
+  document.querySelectorAll('#tab-years input:checked, #tab-categories input:checked, #tab-senders input:checked').forEach((cb) => {
     const q = cb.dataset.query;
-    if (q && !seen.has(q)) {
-      seen.add(q);
-      // Build a label from the checkbox context
-      const item = cb.closest('.check-item');
-      const label = item?.querySelector('.item-label, .sender-name')?.textContent || q;
-      queries.push({ label, query: q });
-    }
+    const label = cb.dataset.label;
+    if (q && !seen.has(q)) { seen.add(q); queries.push({ label, query: q }); }
   });
-
   return queries;
 }
 
-// ── Start delete ──
+// ── Start / Preview ───────────────────────────────────────────────────────────
 
 document.getElementById('start-btn').addEventListener('click', async () => {
   const queries = getSelectedQueries();
-  if (queries.length === 0) return;
-
+  if (!queries.length) return;
   const useTrash = !document.getElementById('toggle-permanent').checked;
-  if (!useTrash && !confirm('This will PERMANENTLY delete emails. They cannot be recovered.\n\nAre you sure?')) return;
-
-  await send({
-    type: 'start',
-    config: { queries, useTrash, dryRun: false },
-  });
+  if (!useTrash && !confirm('Permanently delete these emails? This cannot be undone.')) return;
+  await send({ type: 'start', config: { queries, useTrash, dryRun: false } });
   showScreen('running');
   startJobPoll();
 });
-
-// ── Dry run / preview ──
 
 document.getElementById('dry-run-btn').addEventListener('click', async () => {
   const queries = getSelectedQueries();
-  if (queries.length === 0) return;
-
-  await send({
-    type: 'start',
-    config: { queries, useTrash: true, dryRun: true },
-  });
+  if (!queries.length) return;
+  await send({ type: 'start', config: { queries, useTrash: true, dryRun: true } });
   showScreen('running');
   startJobPoll();
 });
 
-// ── Job rendering ──
+// ── Job rendering ─────────────────────────────────────────────────────────────
 
 function renderFromJob(job) {
   if (!job || job.status === 'idle') {
-    // Go back to dashboard
     send({ type: 'get-scan' }).then((scan) => {
       if (scan?.status === 'done') renderDashboard(scan);
-      else showScreen('scanning');
+      else { showScreen('scanning'); send({ type: 'scan' }).then(() => pollScan()); }
     });
     return;
   }
@@ -301,15 +499,7 @@ function renderFromJob(job) {
       break;
     case 'done':
       showScreen('done');
-      if (job.dryRun) {
-        document.getElementById('done-icon').textContent = '🔍';
-        document.getElementById('done-title').textContent = 'Preview Complete';
-        document.getElementById('done-count').textContent = `${job.scannedCount.toLocaleString()} emails would be deleted`;
-      } else {
-        document.getElementById('done-icon').textContent = '✅';
-        document.getElementById('done-title').textContent = 'Done!';
-        document.getElementById('done-count').textContent = `${job.deletedCount.toLocaleString()} emails deleted`;
-      }
+      renderDoneScreen(job);
       break;
     case 'error':
       showScreen('error');
@@ -318,30 +508,60 @@ function renderFromJob(job) {
   }
 }
 
-function updateRunningUI(job) {
-  document.getElementById('stat-scanned').textContent = fmt(job.scannedCount);
-  document.getElementById('stat-deleted').textContent = fmt(job.deletedCount);
+function renderDoneScreen(job) {
+  if (job.dryRun) {
+    document.getElementById('done-icon').textContent = '🔍';
+    document.getElementById('done-title').textContent = 'Preview Complete';
+    document.getElementById('done-count').textContent = `${job.scannedCount.toLocaleString()} emails would be deleted`;
+    document.getElementById('done-freed').textContent = job.freedBytes ? `~${fmtBytes(job.freedBytes)} would be freed` : '';
+  } else {
+    document.getElementById('done-icon').textContent = '✅';
+    document.getElementById('done-title').textContent = 'Done!';
+    document.getElementById('done-count').textContent = `${job.deletedCount.toLocaleString()} emails deleted`;
+    document.getElementById('done-freed').textContent = job.freedBytes ? `~${fmtBytes(job.freedBytes)} freed` : '';
+  }
 
-  const statusLabel = document.getElementById('status-label');
-  const statusDetail = document.getElementById('status-detail');
-  const progressFill = document.getElementById('progress-fill');
+  // Breakdown
+  const breakdown = document.getElementById('done-breakdown');
+  breakdown.innerHTML = '';
+  const counts = job.queryCounts || {};
+  const sorted = Object.entries(counts).filter(([, n]) => n > 0).sort(([, a], [, b]) => b - a);
+  const typeLabel = job.dryRun ? 'would delete' : 'deleted';
 
-  if (job.status === 'scanning') {
-    statusLabel.textContent = job.dryRun ? 'Counting...' : 'Finding emails...';
-    statusDetail.textContent = job.currentQueryLabel ? `Searching: ${job.currentQueryLabel}` : '';
-    progressFill.className = 'progress-fill scanning';
-    progressFill.style.width = '100%';
-  } else if (job.status === 'deleting') {
-    statusLabel.textContent = 'Deleting...';
-    const total = job.allIds?.length || job.scannedCount || 1;
-    const pct = Math.min(100, Math.round((job.deletedCount / total) * 100));
-    statusDetail.textContent = `${job.deletedCount.toLocaleString()} of ${total.toLocaleString()}`;
-    progressFill.className = 'progress-fill';
-    progressFill.style.width = `${pct}%`;
+  for (const [label, count] of sorted) {
+    breakdown.innerHTML += `
+      <div class="breakdown-row">
+        <span class="breakdown-label">${escHtml(label)}</span>
+        <span class="breakdown-count">${count.toLocaleString()} <span class="breakdown-type">${typeLabel}</span></span>
+      </div>`;
   }
 }
 
-// ── Job polling ──
+function updateRunningUI(job) {
+  document.getElementById('stat-scanned').textContent = fmt(job.scannedCount);
+  document.getElementById('stat-deleted').textContent = fmt(job.deletedCount);
+  document.getElementById('stat-freed').textContent = job.freedBytes ? fmtBytes(job.freedBytes) : '—';
+
+  const fill = document.getElementById('progress-fill');
+  const label = document.getElementById('status-label');
+  const detail = document.getElementById('status-detail');
+
+  if (job.status === 'scanning') {
+    label.textContent = job.dryRun ? 'Counting...' : 'Finding emails...';
+    detail.textContent = job.currentQueryLabel ? `Searching: ${job.currentQueryLabel}` : '';
+    fill.className = 'progress-fill scanning';
+    fill.style.width = '100%';
+  } else {
+    label.textContent = 'Deleting...';
+    const total = job.allIds?.length || 1;
+    const pct = Math.min(100, Math.round((job.deletedCount / total) * 100));
+    detail.textContent = `${job.deletedCount.toLocaleString()} of ${total.toLocaleString()}`;
+    fill.className = 'progress-fill';
+    fill.style.width = `${pct}%`;
+  }
+}
+
+// ── Job polling ───────────────────────────────────────────────────────────────
 
 let jobPoll = null;
 
@@ -350,22 +570,17 @@ function startJobPoll() {
   jobPoll = setInterval(async () => {
     const job = await send({ type: 'get-job' });
     if (!job) return;
-    if (job.status === 'scanning' || job.status === 'deleting') {
-      updateRunningUI(job);
-    } else {
-      clearInterval(jobPoll);
-      renderFromJob(job);
-    }
+    if (job.status === 'scanning' || job.status === 'deleting') updateRunningUI(job);
+    else { clearInterval(jobPoll); renderFromJob(job); }
   }, 800);
 }
 
-// ── Pause / Resume / Cancel ──
+// ── Pause / Resume / Cancel ───────────────────────────────────────────────────
 
 document.getElementById('pause-btn').addEventListener('click', async () => {
   await send({ type: 'pause' });
   clearInterval(jobPoll);
-  const job = await send({ type: 'get-job' });
-  renderFromJob(job);
+  renderFromJob(await send({ type: 'get-job' }));
 });
 
 document.getElementById('resume-btn').addEventListener('click', async () => {
@@ -387,11 +602,10 @@ document.getElementById('cancel-paused-btn').addEventListener('click', async () 
   renderFromJob(null);
 });
 
-// ── Reset ──
+// ── Done / Error reset ────────────────────────────────────────────────────────
 
 document.getElementById('reset-btn').addEventListener('click', async () => {
   await send({ type: 'cancel' });
-  // Trigger a re-scan to get fresh numbers
   await send({ type: 'clear-scan' });
   showScreen('scanning');
   await send({ type: 'scan' });
@@ -403,13 +617,11 @@ document.getElementById('error-reset-btn').addEventListener('click', async () =>
   renderFromJob(null);
 });
 
-// ── Listen for live updates ──
+// ── Live updates from service worker ─────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'job-update' && msg.job) renderFromJob(msg.job);
   if (msg.type === 'scan-update') {
-    send({ type: 'get-scan' }).then((scan) => {
-      if (scan?.status === 'done') renderDashboard(scan);
-    });
+    send({ type: 'get-scan' }).then((s) => { if (s?.status === 'done') renderDashboard(s); });
   }
 });
