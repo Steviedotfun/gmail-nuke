@@ -201,7 +201,7 @@ async function renderDashboard(scan) {
     const hasUnsub = !!info.unsubscribeUrl;
     const unsubUrl = escHtml(info.unsubscribeUrl || '');
     senderList.innerHTML += `
-      <div class="check-item">
+      <label class="check-item">
         <input type="checkbox" data-query="from:${email} ${SAFETY}" data-label="${escHtml(displayName || email)}" />
         <div class="sender-info">
           <div class="sender-name">${escHtml(displayName || email)}</div>
@@ -209,10 +209,10 @@ async function renderDashboard(scan) {
         </div>
         <div class="sender-actions">
           <span class="item-count ${countClass(info.count)}">~${fmt(info.count)}</span>
-          ${hasUnsub ? `<button class="btn-tiny unsub" data-url="${unsubUrl}" onclick="unsubscribe(this)" title="Unsubscribe">Unsub</button>` : ''}
-          <button class="btn-tiny del" data-query="from:${email} ${SAFETY}" data-label="${escHtml(displayName || email)}" onclick="deleteSender(this)" title="Delete all from sender">🗑</button>
+          ${hasUnsub ? `<button class="btn-tiny unsub" data-url="${unsubUrl}" onclick="event.preventDefault();unsubscribe(this)" title="Unsubscribe">Unsub</button>` : ''}
+          <button class="btn-tiny del" data-query="from:${email} ${SAFETY}" data-label="${escHtml(displayName || email)}" onclick="event.preventDefault();deleteSender(this)" title="Delete all from sender">🗑</button>
         </div>
-      </div>`;
+      </label>`;
   }
 
   // Schedule
@@ -688,6 +688,10 @@ function pollUnsubScan() {
 
 function renderUnsubResults(state) {
   showUnsubState('results');
+  // Reset select-all state
+  allSelected = false;
+  const selectAllBtn = document.getElementById('unsub-select-all');
+  if (selectAllBtn) selectAllBtn.textContent = 'Select All';
 
   const senders = Object.values(state.senders || {})
     .filter((s) => s.unsubscribeUrl)
@@ -799,6 +803,8 @@ document.getElementById('unsub-execute-btn').addEventListener('click', async () 
 
   window._unsubDoneHandler = (msg) => {
     if (msg.type !== 'unsub-done') return;
+    window._unsubProgressHandler = null;
+    window._unsubDoneHandler = null;
     renderUnsubDone(selected);
   };
 
