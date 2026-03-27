@@ -6,46 +6,73 @@
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <!-- Auth screen -->
+
+  <!-- ═══ Auth ═══ -->
   <div id="auth-screen" class="screen hidden">
-    <div class="logo">💣 Gmail Nuke</div>
-    <p class="subtitle">Connect your Gmail to get started</p>
+    <div class="header">
+      <div class="logo">Gmail Nuke</div>
+      <div class="logo-sub">Inbox cleanup tool</div>
+    </div>
+    <p class="subtitle">Connect your Gmail to scan your inbox and start cleaning up.</p>
     <button id="auth-btn" class="btn btn-primary btn-full">Sign in with Google</button>
   </div>
 
-  <!-- Idle screen — configure job -->
-  <div id="idle-screen" class="screen hidden">
-    <div class="logo">💣 Gmail Nuke</div>
-    <p class="subtitle">Select what to delete. Starred &amp; Important emails are always safe.</p>
-
-    <div class="section">
-      <label class="checkbox-row">
-        <input type="checkbox" id="chk-old" checked />
-        <span>All email before 2024</span>
-      </label>
-      <label class="checkbox-row">
-        <input type="checkbox" id="chk-promos" checked />
-        <span>Promotions (all time)</span>
-      </label>
-      <label class="checkbox-row">
-        <input type="checkbox" id="chk-social" checked />
-        <span>Social notifications (all time)</span>
-      </label>
-      <label class="checkbox-row">
-        <input type="checkbox" id="chk-updates" checked />
-        <span>Updates (all time)</span>
-      </label>
-      <label class="checkbox-row">
-        <input type="checkbox" id="chk-forums" checked />
-        <span>Forums (all time)</span>
-      </label>
-      <label class="checkbox-row">
-        <input type="checkbox" id="chk-spam" checked />
-        <span>Spam</span>
-      </label>
+  <!-- ═══ Dashboard (post-scan) ═══ -->
+  <div id="dashboard-screen" class="screen hidden">
+    <div class="header">
+      <div class="logo">Gmail Nuke</div>
+      <button id="rescan-btn" class="btn-icon" title="Re-scan inbox">↻</button>
     </div>
 
-    <div class="section">
+    <!-- Overview stats -->
+    <div class="overview-grid">
+      <div class="ov-card">
+        <div class="ov-value" id="ov-total">—</div>
+        <div class="ov-label">Total Emails</div>
+      </div>
+      <div class="ov-card">
+        <div class="ov-value" id="ov-storage">—</div>
+        <div class="ov-label">Storage Used</div>
+      </div>
+      <div class="ov-card safe">
+        <div class="ov-value" id="ov-starred">—</div>
+        <div class="ov-label">Starred</div>
+      </div>
+      <div class="ov-card safe">
+        <div class="ov-value" id="ov-important">—</div>
+        <div class="ov-label">Important</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="tab-years">By Year</button>
+      <button class="tab" data-tab="tab-categories">Categories</button>
+      <button class="tab" data-tab="tab-senders">Top Senders</button>
+    </div>
+
+    <!-- By Year -->
+    <div id="tab-years" class="tab-panel">
+      <div class="section-label">Select years to delete</div>
+      <div id="year-list" class="checklist"></div>
+    </div>
+
+    <!-- By Category -->
+    <div id="tab-categories" class="tab-panel hidden">
+      <div class="section-label">Select categories to delete</div>
+      <div id="category-list" class="checklist"></div>
+    </div>
+
+    <!-- Top Senders -->
+    <div id="tab-senders" class="tab-panel hidden">
+      <div class="section-label">Biggest senders (sampled from junk)</div>
+      <div id="sender-list" class="checklist"></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="action-bar">
+      <div class="safety-badge">Starred &amp; Important always protected</div>
+
       <div class="toggle-row">
         <span id="mode-label">Move to Trash</span>
         <label class="toggle">
@@ -53,26 +80,33 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
+
+      <div class="btn-row">
+        <button id="dry-run-btn" class="btn btn-secondary">Preview</button>
+        <button id="start-btn" class="btn btn-danger" style="flex:2">Delete Selected</button>
+      </div>
     </div>
-
-    <div class="safety-badge">🛡️ Starred &amp; Important emails are always protected</div>
-
-    <button id="dry-run-btn" class="btn btn-secondary btn-full">Dry Run (count only)</button>
-    <button id="start-btn" class="btn btn-danger btn-full">Start Deleting</button>
   </div>
 
-  <!-- Running screen -->
-  <div id="running-screen" class="screen hidden">
-    <div class="logo">💣 Gmail Nuke</div>
+  <!-- ═══ Scanning inbox ═══ -->
+  <div id="scanning-screen" class="screen hidden">
+    <div class="header">
+      <div class="logo">Gmail Nuke</div>
+    </div>
+    <div class="scan-anim">
+      <div class="scan-ring"></div>
+    </div>
+    <div class="status-label center" id="scan-status">Scanning your inbox...</div>
+    <div class="status-detail center" id="scan-detail">This takes about 30 seconds</div>
+  </div>
 
+  <!-- ═══ Running delete job ═══ -->
+  <div id="running-screen" class="screen hidden">
+    <div class="header"><div class="logo">Gmail Nuke</div></div>
     <div class="status-area">
       <div class="status-label" id="status-label">Scanning...</div>
       <div class="status-detail" id="status-detail">Looking for emails to delete</div>
-
-      <div class="progress-bar">
-        <div class="progress-fill" id="progress-fill"></div>
-      </div>
-
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
       <div class="stats">
         <div class="stat">
           <span class="stat-value" id="stat-scanned">0</span>
@@ -84,16 +118,15 @@
         </div>
       </div>
     </div>
-
     <div class="btn-row">
       <button id="pause-btn" class="btn btn-secondary">Pause</button>
       <button id="cancel-btn" class="btn btn-ghost">Cancel</button>
     </div>
   </div>
 
-  <!-- Paused screen -->
+  <!-- ═══ Paused ═══ -->
   <div id="paused-screen" class="screen hidden">
-    <div class="logo">💣 Gmail Nuke</div>
+    <div class="header"><div class="logo">Gmail Nuke</div></div>
     <div class="status-area">
       <div class="status-label">Paused</div>
       <div class="stats">
@@ -113,18 +146,18 @@
     </div>
   </div>
 
-  <!-- Done screen -->
+  <!-- ═══ Done ═══ -->
   <div id="done-screen" class="screen hidden">
-    <div class="logo">💣 Gmail Nuke</div>
-    <div class="done-icon">✅</div>
+    <div class="header"><div class="logo">Gmail Nuke</div></div>
+    <div class="done-icon" id="done-icon">✅</div>
     <div class="done-title" id="done-title">Done!</div>
     <div class="done-count" id="done-count">0 emails deleted</div>
-    <button id="reset-btn" class="btn btn-primary btn-full">Run Again</button>
+    <button id="reset-btn" class="btn btn-primary btn-full">Back to Dashboard</button>
   </div>
 
-  <!-- Error screen -->
+  <!-- ═══ Error ═══ -->
   <div id="error-screen" class="screen hidden">
-    <div class="logo">💣 Gmail Nuke</div>
+    <div class="header"><div class="logo">Gmail Nuke</div></div>
     <div class="done-icon">❌</div>
     <div class="done-title">Error</div>
     <div class="error-msg" id="error-msg"></div>
